@@ -248,12 +248,20 @@ func (f *Formula) share(rand io.Reader, k *matrixZp) ([]*matrixZp, error) {
 		gate := f.Gates[i]
 		switch gate.Class {
 		case Andgate:
+			// Secret-share the parent's share across the two AND inputs:
+			// one input gets a fresh random share and the other gets
+			// (parent - random). The two shares sum to the parent share, but
+			// neither input alone reveals it. Previously In0 was overwritten
+			// with (Out - In1) where In1 was the zero matrix, so In0 received
+			// the entire parent share and In1 received zero, letting a single
+			// AND leaf (e.g. the Boneh-Katz wildcard wire) reconstruct the
+			// whole KEM secret.
 			shares[gate.In0], err = randomMatrixZp(rand, k.rows, k.cols)
 			if err != nil {
 				return nil, err
 			}
 			shares[gate.In1] = newMatrixZp(k.rows, k.cols)
-			shares[gate.In0].sub(shares[gate.Out], shares[gate.In1])
+			shares[gate.In1].sub(shares[gate.Out], shares[gate.In0])
 
 		case Orgate:
 			shares[gate.In0] = newMatrixZp(k.rows, k.cols)
