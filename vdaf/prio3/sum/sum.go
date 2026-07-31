@@ -2,6 +2,7 @@
 package sum
 
 import (
+	"errors"
 	"math/bits"
 
 	"github.com/cloudflare/circl/vdaf/prio3/arith/fp64"
@@ -86,8 +87,9 @@ func (s *Sum) Unshard(aggShares []AggShare, numMeas uint) (aggregate *uint64, er
 
 type flpSum struct {
 	flp.FLP[flp.GadgetPolyEvalx2x, poly, Vec, Fp, *Fp]
-	bits   uint
-	offset Fp
+	bits           uint
+	maxMeasurement uint64
+	offset         Fp
 }
 
 func newFlpSum(maxMeasurement uint64) (*flpSum, error) {
@@ -96,6 +98,7 @@ func newFlpSum(maxMeasurement uint64) (*flpSum, error) {
 
 	s := new(flpSum)
 	s.bits = bits
+	s.maxMeasurement = maxMeasurement
 	err := s.offset.SetUint64(offset)
 	if err != nil {
 		return nil, err
@@ -163,6 +166,12 @@ func (s *flpSum) Decode(output Vec, numMeas uint) (*uint64, error) {
 		return nil, flp.ErrOutputLen
 	}
 
+	hi, maxAggregate := bits.Mul64(uint64(numMeas), s.maxMeasurement)
+	var fieldBound Fp
+	if hi != 0 || fieldBound.SetUint64(maxAggregate) != nil {
+		return nil, ErrAggregateBound
+	}
+
 	n, err := output[0].GetUint64()
 	if err != nil {
 		return nil, err
@@ -170,3 +179,7 @@ func (s *flpSum) Decode(output Vec, numMeas uint) (*uint64, error) {
 
 	return &n, nil
 }
+
+// ErrAggregateBound indicates that a Sum aggregate may wrap around the Fp64
+// field for the supplied number of measurements.
+var ErrAggregateBound = errors.New("sum aggregate bound is not representable in Fp64")
